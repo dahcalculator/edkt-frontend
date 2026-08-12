@@ -126,7 +126,7 @@ export default function Login() {
           <div className="mt-6 text-center">
             <p className="text-xs text-gray-500 font-medium">
               Don't have a student profile yet?{' '}
-              <Link href="/registration" className="font-bold text-indigo-600 hover:underline">
+              <Link href="/register" className="font-bold text-indigo-600 hover:underline">
                 Register here
               </Link>
             </p>

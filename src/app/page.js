@@ -75,7 +75,7 @@ export default function Home() {
                   Sign In
                 </Link>
                 <Link
-                  href="/registration"
+                  href="/register"
                   className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all active:scale-95"
                 >
                   Get Started
@@ -128,7 +128,7 @@ export default function Home() {
               ) : (
                 <motion.div whileHover={{ scale: 1.02, y: -2 }} whileTap={{ scale: 0.98 }}>
                   <Link
-                    href="/registration"
+                    href="/register"
                     className="block bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-8 py-4 rounded-2xl shadow-lg transition-colors text-center"
                   >
                     Create Student Profile
