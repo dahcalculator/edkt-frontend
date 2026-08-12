@@ -1,8 +1,12 @@
 import axios from 'axios';
 
-// Ensures client-side Axios calls use the live production Render URL
+// Get backend URL from environment or fallback
+const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+console.log("Current API Base URL:", backendUrl);
+
 const API = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  baseURL: backendUrl,
   headers: {
     'Content-Type': 'application/json',
   },
