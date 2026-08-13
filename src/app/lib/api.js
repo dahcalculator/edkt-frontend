@@ -1,14 +1,12 @@
 import axios from 'axios';
 
-// Replace 'https://your-app-name.onrender.com' with your actual live Render backend URL
-const RENDER_BACKEND_URL = 'https://edkt-backend.onrender.com';
+// Get backend URL from environment or fallback
+const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const baseURL = process.env.NEXT_PUBLIC_API_URL || RENDER_BACKEND_URL;
-
-console.log("Current API Base URL:", baseURL);
+console.log("Current API Base URL:", backendUrl);
 
 const API = axios.create({
-  baseURL: baseURL,
+  baseURL: backendUrl,
   headers: {
     'Content-Type': 'application/json',
   },
