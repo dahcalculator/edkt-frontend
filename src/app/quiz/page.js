@@ -1,19 +1,64 @@
 "use client";
 import { useState, useEffect } from 'react';
 import API from '../lib/api';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 export default function Quiz() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const topicIdParam = searchParams.get('topicId');
+
+  // View States: 'LECTURE' or 'QUIZ'
+  const [viewState, setViewState] = useState('LECTURE');
+  const [lecture, setLecture] = useState(null);
+  const [lectureLoading, setLectureLoading] = useState(true);
+
+  // Quiz States
   const [question, setQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [startTime, setStartTime] = useState(null);
   const [quizComplete, setQuizComplete] = useState(false);
   const [questionCount, setQuestionCount] = useState(0);
-  const [sessionAnsweredIds, setSessionAnsweredIds] = useState([]); // Tracks current session answered IDs
+  const [sessionAnsweredIds, setSessionAnsweredIds] = useState([]);
   const [totalPoolSize, setTotalPoolSize] = useState(20);
-  const router = useRouter();
 
-  // Fetch next adaptive question passing current session's answered IDs
+  // 1. Fetch Pre-Assessment Lecture Content on Load
+  useEffect(() => {
+    const fetchLecture = async () => {
+      try {
+        const storedUser = localStorage.getItem('user');
+        let matric = localStorage.getItem('studentMatric');
+        if (storedUser) {
+          const userObj = JSON.parse(storedUser);
+          matric = userObj.matric_no || userObj.matric || matric;
+        }
+
+        const targetTopic = topicIdParam || 1;
+        const encodedMatric = encodeURIComponent(matric || '');
+
+        const res = await API.get(`/syllabus/${targetTopic}/lecture?matric=${encodedMatric}`);
+        setLecture(res.data);
+      } catch (err) {
+        console.warn("Lecture fetch note:", err);
+        // Fallback lecture content if topic endpoint yields nothing
+        setLecture({
+          title: "MAT102 Module Review: Calculus & Vectors",
+          content_markdown: "Review standard derivative rules, limits, and vector dot products before attempting your practice round.",
+          is_first_attempt: true
+        });
+      } finally {
+        setLectureLoading(false);
+      }
+    };
+
+    fetchLecture();
+  }, [topicIdParam]);
+
+  // 2. Fetch Next Adaptive Question
   const fetchQuestion = async (answeredList = sessionAnsweredIds) => {
     setLoading(true);
     try {
@@ -33,14 +78,13 @@ export default function Quiz() {
       const encodedMatric = encodeURIComponent(matric);
       const excludeParam = answeredList.join(',');
 
-      // Send exclude parameter containing active session question IDs
       const res = await API.get(
         `/quiz/next-question?matric=${encodedMatric}&exclude=${excludeParam}&_t=${Date.now()}`
       );
 
       if (res.data) {
         setQuestion(res.data);
-        setStartTime(Date.now());
+        setStartTime(Date.now()); // Start response latency clock ONLY after question renders
         setQuizComplete(false);
       }
     } catch (err) {
@@ -54,13 +98,16 @@ export default function Quiz() {
     }
   };
 
-  useEffect(() => {
+  // Start practice round after reviewing lecture
+  const handleProceedToQuiz = () => {
+    setViewState('QUIZ');
     fetchQuestion([]);
-  }, []);
+  };
 
+  // 3. Submit Answer Telemetry (\Delta\tau_t)
   const handleAnswer = async (selectedOption) => {
     const endTime = Date.now();
-    const responseTime = (endTime - startTime) / 1000;
+    const responseTime = (endTime - startTime) / 1000; // Calculate exact response latency
     const isCorrect = selectedOption === question.correct_answer;
 
     const storedUser = localStorage.getItem('user');
@@ -71,7 +118,6 @@ export default function Quiz() {
     }
 
     try {
-      // 1. Submit answer log
       await API.post('/quiz/submit', {
         matric: matric.trim().toUpperCase(),
         question_id: question.id,
@@ -79,18 +125,15 @@ export default function Quiz() {
         response_time: responseTime
       });
 
-      // 2. Add question.id to current session answered tracking array
       const updatedAnsweredList = [...sessionAnsweredIds, question.id];
       setSessionAnsweredIds(updatedAnsweredList);
 
       const nextCount = questionCount + 1;
       setQuestionCount(nextCount);
 
-      // 3. Check Session Bounds
       if (nextCount >= totalPoolSize) {
         setQuizComplete(true);
       } else {
-        // Fetch next unrepeated question
         await fetchQuestion(updatedAnsweredList);
       }
     } catch (err) {
@@ -99,6 +142,58 @@ export default function Quiz() {
     }
   };
 
+  // View State 1: Pre-Assessment Lecture Card
+  if (viewState === 'LECTURE') {
+    if (lectureLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-500 font-medium">
+          Loading MAT102 Instructional Card...
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 font-sans flex items-center justify-center">
+        <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100 p-8 space-y-6">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+            <div>
+              <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">
+                MAT102 Instructional Scaffolding
+              </span>
+              <h2 className="text-2xl font-black text-gray-900 tracking-tight mt-1">
+                {lecture?.title}
+              </h2>
+            </div>
+            {lecture?.is_first_attempt && (
+              <span className="bg-amber-50 text-amber-700 text-xs font-bold px-3 py-1 rounded-full border border-amber-200">
+                Recommended Reading
+              </span>
+            )}
+          </div>
+
+          <div className="text-gray-700 text-sm leading-relaxed space-y-3 bg-gray-50/50 p-6 rounded-2xl border border-gray-100">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {lecture?.content_markdown}
+            </ReactMarkdown>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={handleProceedToQuiz}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-2xl shadow-md transition-all flex items-center justify-center space-x-2 text-sm cursor-pointer"
+            >
+              <span>Proceed to MAT102 Practice Quiz</span>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Quiz Loading State
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-500 font-medium">
@@ -122,9 +217,8 @@ export default function Quiz() {
             <button
               onClick={() => {
                 setQuestionCount(0);
-                setSessionAnsweredIds([]); // Reset session tracking array for brand new round
-                setQuizComplete(false);
-                fetchQuestion([]);
+                setSessionAnsweredIds([]);
+                setViewState('LECTURE');
               }}
               className="w-full bg-indigo-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:bg-indigo-700 transition text-sm cursor-pointer"
             >
@@ -165,7 +259,7 @@ export default function Quiz() {
 
       <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
         <div className="bg-indigo-600 p-8 text-white">
-          <span className="text-xs font-bold uppercase tracking-widest opacity-80">MAT101 Adaptive Diagnostic Session</span>
+          <span className="text-xs font-bold uppercase tracking-widest opacity-80">MAT102 Adaptive Diagnostic Session</span>
           <h2 className="text-xl font-bold mt-2 leading-relaxed">{question?.content}</h2>
         </div>
 

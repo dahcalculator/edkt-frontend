@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import 'katex/dist/katex.min.css';
 
 export default function Home() {
   const router = useRouter();
